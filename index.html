@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Draft Oracle — LoL Champion Recommender</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Exo+2:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --gold:    #C8A84B;
+    --gold-lt: #F0D080;
+    --gold-dk: #7A6028;
+    --bg:      #0A0C10;
+    --bg2:     #10141C;
+    --bg3:     #181E2A;
+    --border:  rgba(200,168,75,0.18);
+    --border-bright: rgba(200,168,75,0.5);
+    --ally:    #2E6B9E;
+    --ally-lt: #4A9FD4;
+    --ally-bg: rgba(46,107,158,0.12);
+    --enemy:   #9E2E2E;
+    --enemy-lt:#D44A4A;
+    --enemy-bg:rgba(158,46,46,0.12);
+    --text:    #E8E0D0;
+    --muted:   #6B7080;
+    --radius:  6px;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Exo 2', sans-serif;
+    font-weight: 400;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Background grid ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(200,168,75,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(200,168,75,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+  body::after {
+    content: '';
+    position: fixed; inset: 0;
+    background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(200,168,75,0.06) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrap { position: relative; z-index: 1; max-width: 960px; margin: 0 auto; padding: 0 24px 80px; }
+
+  /* ── Header ── */
+  header {
+    text-align: center;
+    padding: 56px 0 40px;
+    position: relative;
+  }
+  header::after {
+    content: '';
+    display: block;
+    width: 240px; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    margin: 24px auto 0;
+  }
+  .logo-line {
+    display: flex; align-items: center; justify-content: center; gap: 14px;
+    margin-bottom: 8px;
+  }
+  .logo-diamond {
+    width: 10px; height: 10px;
+    background: var(--gold);
+    transform: rotate(45deg);
+    flex-shrink: 0;
+  }
+  h1 {
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 700;
+    font-size: clamp(2rem, 5vw, 3.2rem);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--gold-lt);
+    line-height: 1;
+  }
+  .subtitle {
+    font-size: 0.85rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-top: 6px;
+  }
+
+  /* ── Position selector ── */
+  .pos-section { margin-bottom: 32px; }
+  .section-label {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 0.75rem;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 10px;
+  }
+  .pos-tabs {
+    display: flex; gap: 8px; flex-wrap: wrap;
+  }
+  .pos-tab {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 8px 18px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    cursor: pointer;
+    border-radius: var(--radius);
+    transition: all 0.15s;
+  }
+  .pos-tab:hover { border-color: var(--border-bright); color: var(--text); }
+  .pos-tab.active {
+    background: rgba(200,168,75,0.1);
+    border-color: var(--gold);
+    color: var(--gold-lt);
+  }
+
+  /* ── Two-panel draft board ── */
+  .draft-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 28px;
+  }
+  @media (max-width: 600px) { .draft-grid { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .panel::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  }
+  .panel.ally::before  { background: linear-gradient(90deg, transparent, var(--ally-lt), transparent); }
+  .panel.enemy::before { background: linear-gradient(90deg, transparent, var(--enemy-lt), transparent); }
+
+  .panel-title {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 0.78rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .panel.ally  .panel-title { color: var(--ally-lt); }
+  .panel.enemy .panel-title { color: var(--enemy-lt); }
+  .panel-title .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .ally  .dot { background: var(--ally-lt); }
+  .enemy .dot { background: var(--enemy-lt); }
+
+  /* ── Champion slots ── */
+  .slot-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .slot {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 8px 12px;
+    transition: border-color 0.15s;
+    position: relative;
+  }
+  .slot:focus-within { border-color: var(--border-bright); }
+
+  .slot-num {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--muted);
+    min-width: 16px;
+  }
+
+  .slot input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-family: 'Exo 2', sans-serif;
+    font-size: 0.92rem;
+    caret-color: var(--gold);
+  }
+  .slot input::placeholder { color: var(--muted); }
+
+  .slot-badge {
+    font-size: 0.68rem;
+    font-family: 'Rajdhani', sans-serif;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 3px;
+    display: none;
+  }
+  .slot.filled .slot-badge { display: block; }
+  .ally  .slot-badge { background: var(--ally-bg);  color: var(--ally-lt);  border: 1px solid rgba(74,159,212,0.3); }
+  .enemy .slot-badge { background: var(--enemy-bg); color: var(--enemy-lt); border: 1px solid rgba(212,74,74,0.3); }
+
+  .slot .clear-btn {
+    background: none; border: none; cursor: pointer;
+    color: var(--muted); font-size: 14px; line-height: 1;
+    padding: 2px 4px; display: none;
+    transition: color 0.12s;
+  }
+  .slot.filled .clear-btn { display: block; }
+  .slot .clear-btn:hover { color: var(--text); }
+
+  /* Autocomplete dropdown */
+  .autocomplete-list {
+    position: absolute; left: 0; right: 0; top: 100%;
+    background: #1A202E;
+    border: 1px solid var(--border-bright);
+    border-top: none;
+    border-radius: 0 0 var(--radius) var(--radius);
+    z-index: 100;
+    max-height: 180px;
+    overflow-y: auto;
+    display: none;
+  }
+  .autocomplete-list.open { display: block; }
+  .ac-item {
+    padding: 8px 14px;
+    font-size: 0.88rem;
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .ac-item:hover, .ac-item.selected { background: rgba(200,168,75,0.1); color: var(--gold-lt); }
+  .ac-item em { font-style: normal; color: var(--gold); }
+
+  /* ── Recommend button ── */
+  .btn-wrap { text-align: center; margin-bottom: 36px; }
+  .recommend-btn {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    padding: 14px 52px;
+    background: linear-gradient(135deg, rgba(200,168,75,0.15), rgba(200,168,75,0.05));
+    border: 1px solid var(--gold);
+    color: var(--gold-lt);
+    cursor: pointer;
+    border-radius: var(--radius);
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .recommend-btn::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(135deg, rgba(200,168,75,0.25), transparent);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .recommend-btn:hover::before { opacity: 1; }
+  .recommend-btn:hover { box-shadow: 0 0 28px rgba(200,168,75,0.2); }
+  .recommend-btn:active { transform: scale(0.98); }
+  .recommend-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  /* ── Results ── */
+  #results { display: none; }
+  #results.visible { display: block; }
+
+  .results-header {
+    text-align: center;
+    margin-bottom: 24px;
+  }
+  .results-header h2 {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 0.75rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 4px;
+  }
+  .results-header .context-line {
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+  .context-champ { color: var(--text); font-weight: 500; }
+
+  .rec-list { display: flex; flex-direction: column; gap: 10px; }
+
+  .rec-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    display: grid;
+    grid-template-columns: 36px 1fr auto;
+    align-items: center;
+    gap: 16px;
+    opacity: 0;
+    transform: translateY(12px);
+    transition: opacity 0.3s, transform 0.3s, border-color 0.15s;
+    position: relative;
+    overflow: hidden;
+  }
+  .rec-card.shown { opacity: 1; transform: none; }
+  .rec-card:hover { border-color: var(--border-bright); }
+  .rec-card::before {
+    content: '';
+    position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  }
+  .rec-card:nth-child(1)::before { background: var(--gold-lt); }
+  .rec-card:nth-child(2)::before { background: var(--gold); }
+  .rec-card:nth-child(3)::before { background: var(--gold-dk); }
+  .rec-card:nth-child(4)::before, .rec-card:nth-child(5)::before { background: var(--muted); }
+
+  .rec-rank {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--muted);
+    text-align: center;
+    line-height: 1;
+  }
+  .rec-card:nth-child(1) .rec-rank { color: var(--gold-lt); }
+  .rec-card:nth-child(2) .rec-rank { color: var(--gold); }
+
+  .rec-info {}
+  .rec-name {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 1.15rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+  .rec-bar-wrap {
+    height: 3px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 2px;
+    overflow: hidden;
+    width: 100%;
+    max-width: 280px;
+  }
+  .rec-bar {
+    height: 100%;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--gold-dk), var(--gold-lt));
+    width: 0%;
+    transition: width 0.6s cubic-bezier(0.4,0,0.2,1);
+  }
+
+  .rec-score-wrap { text-align: right; }
+  .rec-score {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--gold);
+  }
+  .rec-score-label {
+    font-size: 0.68rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  /* ── Error / status ── */
+  .status-msg {
+    text-align: center;
+    font-size: 0.85rem;
+    padding: 12px;
+    border-radius: var(--radius);
+    margin-bottom: 20px;
+    display: none;
+  }
+  .status-msg.error   { background: rgba(158,46,46,0.15); border: 1px solid rgba(212,74,74,0.3); color: var(--enemy-lt); display: block; }
+  .status-msg.warning { background: rgba(200,168,75,0.1);  border: 1px solid var(--border);        color: var(--gold);      display: block; }
+
+  /* ── Note about model ── */
+  .model-note {
+    margin-top: 40px;
+    padding: 20px 24px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 0.82rem;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+  .model-note strong { color: var(--text); font-weight: 500; }
+  .model-note code {
+    font-family: monospace;
+    background: var(--bg3);
+    padding: 1px 6px;
+    border-radius: 3px;
+    color: var(--gold);
+    font-size: 0.78rem;
+  }
+  .model-note a { color: var(--gold); text-decoration: none; }
+  .model-note a:hover { text-decoration: underline; }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg2); }
+  ::-webkit-scrollbar-thumb { background: var(--gold-dk); border-radius: 2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="logo-line">
+      <div class="logo-diamond"></div>
+      <h1>Draft Oracle</h1>
+      <div class="logo-diamond"></div>
+    </div>
+    <p class="subtitle">League of Legends · Champion Recommender</p>
+  </header>
+
+  <!-- Position selector -->
+  <div class="pos-section">
+    <div class="section-label">Your Role</div>
+    <div class="pos-tabs" id="posTabs">
+      <button class="pos-tab" data-pos="TOP">Top</button>
+      <button class="pos-tab" data-pos="JUNGLE">Jungle</button>
+      <button class="pos-tab active" data-pos="MIDDLE">Mid</button>
+      <button class="pos-tab" data-pos="BOTTOM">Bot</button>
+      <button class="pos-tab" data-pos="UTILITY">Support</button>
+    </div>
+  </div>
+
+  <!-- Draft inputs -->
+  <div class="draft-grid">
+    <!-- Allies -->
+    <div class="panel ally">
+      <div class="panel-title"><span class="dot"></span>Ally Champions</div>
+      <div class="slot-list" id="allySlots"></div>
+    </div>
+    <!-- Enemies -->
+    <div class="panel enemy">
+      <div class="panel-title"><span class="dot"></span>Enemy Champions</div>
+      <div class="slot-list" id="enemySlots"></div>
+    </div>
+  </div>
+
+  <div id="statusMsg" class="status-msg"></div>
+
+  <div class="btn-wrap">
+    <button class="recommend-btn" id="recommendBtn" onclick="runRecommend()">
+      ⬡ &nbsp;Analyse Draft
+    </button>
+  </div>
+
+  <!-- Results -->
+  <div id="results">
+    <div class="results-header">
+      <h2>Recommended Picks</h2>
+      <p class="context-line" id="contextLine"></p>
+    </div>
+    <div class="rec-list" id="recList"></div>
+  </div>
+
+  <!-- Note -->
+  <div class="model-note">
+    <strong>How it works:</strong> This UI connects to a Random Forest classifier trained on ranked match data.
+    Enter your 4 teammates' picks and all 5 enemy picks, select your role, then click Analyse Draft.
+    The model returns champions ranked by <strong>win-score</strong> — the probability that a winning team
+    played that champion in a similar draft context.<br><br>
+    <strong>Setup:</strong> The recommender requires a running Python backend serving the model via a local API.
+    See <code>server.py</code> for the Flask endpoint, or replace <code>API_URL</code> below with your deployed endpoint.
+    For local use, run <code>python server.py</code> and open this page via a local server.
+  </div>
+
+</div>
+
+<script>
+// ── Config ────────────────────────────────────────────────────────────────────
+// Replace with your deployed API URL, e.g. a Render/Railway/HuggingFace endpoint
+// For local dev: 'http://localhost:5000/recommend'
+const API_URL = 'http://localhost:5000/recommend';
+
+// ── Champion list (full roster for autocomplete) ───────────────────────────────
+// This list covers the roster as of mid-2025 — update as new champions release
+const CHAMPIONS = [
+  "Aatrox","Ahri","Akali","Akshan","Alistar","Amumu","Anivia","Annie","Aphelios",
+  "Ashe","AurelionSol","Aurora","Azir","Bard","BelVeth","Blitzcrank","Brand",
+  "Braum","Briar","Caitlyn","Camille","Cassiopeia","ChoGath","Corki","Darius",
+  "Diana","DrMundo","Draven","Ekko","Elise","Evelynn","Ezreal","Fiddlesticks",
+  "Fiora","Fizz","Galio","Gangplank","Garen","Gnar","Gragas","Graves","Gwen",
+  "Hecarim","Heimerdinger","Hwei","Illaoi","Irelia","Ivern","Janna","JarvanIV",
+  "Jax","Jayce","Jhin","Jinx","KSante","Kaisa","Kalista","Karma","Karthus",
+  "Kassadin","Katarina","Kayle","Kayn","Kennen","KhaZix","Kindred","Kled",
+  "KogMaw","Leblanc","LeeSin","Leona","Lillia","Lissandra","Lucian","Lulu",
+  "Lux","Malphite","Malzahar","Maokai","MasterYi","Milio","Miss Fortune","Mordekaiser",
+  "Morgana","Naafiri","Nami","Nasus","Nautilus","Neeko","Nidalee","Nilah",
+  "Nocturne","Nunu","Olaf","Orianna","Ornn","Pantheon","Poppy","Pyke",
+  "Qiyana","Quinn","Rakan","Rammus","RekSai","Rell","Renata","Renekton",
+  "Rengar","Riven","Rumble","Ryze","Samira","Sejuani","Senna","Seraphine",
+  "Sett","Shaco","Shen","Shyvana","Singed","Sion","Sivir","Skarner",
+  "Smolder","Sona","Soraka","Swain","Sylas","Syndra","TahmKench","Taliyah",
+  "Talon","Taric","Teemo","Thresh","Tristana","Trundle","Tryndamere","TwistedFate",
+  "Twitch","Udyr","Urgot","Varus","Vayne","Veigar","VelKoz","Vex",
+  "Vi","Viego","Viktor","Vladimir","Volibear","Warwick","Wukong","Xayah",
+  "Xerath","XinZhao","Yasuo","Yone","Yorick","Yuumi","Yunara","Zac",
+  "Zed","Zeri","Ziggs","Zilean","Zoe","Zyra","Mel","Ambessa"
+].sort();
+
+// ── State ──────────────────────────────────────────────────────────────────────
+let selectedPos = 'MIDDLE';
+
+// ── Build slots ────────────────────────────────────────────────────────────────
+function buildSlots(containerId, count, type) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+  for (let i = 0; i < count; i++) {
+    const label = type === 'ally'
+      ? ['Top','Jungle','Jungle/Mid','Bot','Support'][i] || `Ally ${i+1}`
+      : `Enemy ${i+1}`;
+    const slot = document.createElement('div');
+    slot.className = 'slot';
+    slot.id = `${type}-slot-${i}`;
+    slot.innerHTML = `
+      <span class="slot-num">${i+1}</span>
+      <input type="text" placeholder="${label}" autocomplete="off"
+             id="${type}-input-${i}" data-type="${type}" data-idx="${i}"
+             oninput="onInput(this)" onkeydown="onKeydown(event,this)"
+             onfocus="showDropdown(this)" onblur="hideDropdown(this,300)">
+      <span class="slot-badge">✓</span>
+      <button class="clear-btn" onclick="clearSlot('${type}',${i})" title="Clear">×</button>
+      <div class="autocomplete-list" id="${type}-ac-${i}"></div>
+    `;
+    container.appendChild(slot);
+  }
+}
+
+buildSlots('allySlots',  4, 'ally');
+buildSlots('enemySlots', 5, 'enemy');
+
+// ── Position tabs ──────────────────────────────────────────────────────────────
+document.getElementById('posTabs').addEventListener('click', e => {
+  const btn = e.target.closest('.pos-tab');
+  if (!btn) return;
+  document.querySelectorAll('.pos-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  selectedPos = btn.dataset.pos;
+});
+
+// ── Autocomplete ───────────────────────────────────────────────────────────────
+let acSelected = -1;
+
+function getMatches(query) {
+  if (!query) return [];
+  const q = query.toLowerCase();
+  return CHAMPIONS.filter(c => c.toLowerCase().includes(q)).slice(0, 8);
+}
+
+function onInput(input) {
+  const { type, idx } = input.dataset;
+  const slot = document.getElementById(`${type}-slot-${idx}`);
+  slot.classList.toggle('filled', input.value.trim().length > 0);
+  showDropdown(input);
+}
+
+function showDropdown(input) {
+  const { type, idx } = input.dataset;
+  const ac = document.getElementById(`${type}-ac-${idx}`);
+  const matches = getMatches(input.value);
+  acSelected = -1;
+
+  if (!matches.length || !input.value) { ac.classList.remove('open'); return; }
+
+  const q = input.value.toLowerCase();
+  ac.innerHTML = matches.map((c, i) => {
+    const hi = c.replace(new RegExp(`(${q})`, 'i'), '<em>$1</em>');
+    return `<div class="ac-item" data-name="${c}" data-idx="${i}"
+               onmousedown="selectAC('${type}',${idx},'${c}')">${hi}</div>`;
+  }).join('');
+  ac.classList.add('open');
+}
+
+function hideDropdown(input, delay) {
+  const { type, idx } = input.dataset;
+  setTimeout(() => {
+    const ac = document.getElementById(`${type}-ac-${idx}`);
+    ac.classList.remove('open');
+  }, delay);
+}
+
+function selectAC(type, idx, name) {
+  const input = document.getElementById(`${type}-input-${idx}`);
+  input.value = name;
+  document.getElementById(`${type}-slot-${idx}`).classList.add('filled');
+  document.getElementById(`${type}-ac-${idx}`).classList.remove('open');
+}
+
+function onKeydown(e, input) {
+  const { type, idx } = input.dataset;
+  const ac = document.getElementById(`${type}-ac-${idx}`);
+  const items = ac.querySelectorAll('.ac-item');
+  if (!ac.classList.contains('open')) return;
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    acSelected = Math.min(acSelected + 1, items.length - 1);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    acSelected = Math.max(acSelected - 1, -1);
+  } else if (e.key === 'Enter' && acSelected >= 0) {
+    e.preventDefault();
+    selectAC(type, idx, items[acSelected].dataset.name);
+    return;
+  } else if (e.key === 'Escape') {
+    ac.classList.remove('open'); return;
+  }
+  items.forEach((item, i) => item.classList.toggle('selected', i === acSelected));
+  if (acSelected >= 0) items[acSelected].scrollIntoView({ block: 'nearest' });
+}
+
+function clearSlot(type, idx) {
+  const input = document.getElementById(`${type}-input-${idx}`);
+  input.value = '';
+  document.getElementById(`${type}-slot-${idx}`).classList.remove('filled');
+  document.getElementById(`${type}-ac-${idx}`).classList.remove('open');
+}
+
+// ── Validation ─────────────────────────────────────────────────────────────────
+function getValues(type, count) {
+  return Array.from({ length: count }, (_, i) =>
+    document.getElementById(`${type}-input-${i}`).value.trim()
+  );
+}
+
+function showStatus(msg, type) {
+  const el = document.getElementById('statusMsg');
+  el.textContent = msg;
+  el.className = `status-msg ${type}`;
+}
+function clearStatus() {
+  const el = document.getElementById('statusMsg');
+  el.className = 'status-msg';
+}
+
+// ── Recommend ──────────────────────────────────────────────────────────────────
+async function runRecommend() {
+  clearStatus();
+  const allies  = getValues('ally',  4);
+  const enemies = getValues('enemy', 5);
+
+  const emptyAllies  = allies.filter(v => !v).length;
+  const emptyEnemies = enemies.filter(v => !v).length;
+
+  if (emptyAllies > 0 || emptyEnemies > 0) {
+    showStatus(`Please fill in all ${emptyAllies ? emptyAllies + ' ally' : ''} ${emptyEnemies ? emptyEnemies + ' enemy' : ''} slot(s).`, 'error');
+    return;
+  }
+
+  const allPicks = [...allies, ...enemies];
+  const dupes = allPicks.filter((v, i) => allPicks.indexOf(v) !== i);
+  if (dupes.length) {
+    showStatus(`Duplicate champion detected: ${[...new Set(dupes)].join(', ')}`, 'error');
+    return;
+  }
+
+  const btn = document.getElementById('recommendBtn');
+  btn.disabled = true;
+  btn.textContent = '⬡  Analysing...';
+  document.getElementById('results').classList.remove('visible');
+
+  try {
+    const resp = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ allies, enemies, position: selectedPos, top_k: 5 })
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error || `Server error ${resp.status}`);
+    }
+
+    const data = await resp.json();
+    renderResults(data.recommendations, allies, enemies);
+
+  } catch (err) {
+    // ── Demo mode: show placeholder results when no backend is running ──
+    if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+      showStatus('No backend connected — showing demo output. See model-note below to set up server.py.', 'warning');
+      renderResults(getDemoResults(), allies, enemies);
+    } else {
+      showStatus(`Error: ${err.message}`, 'error');
+    }
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '⬡ &nbsp;Analyse Draft';
+  }
+}
+
+function getDemoResults() {
+  // Placeholder results shown when no backend is connected
+  return [
+    { champion: 'Orianna',    win_score: 0.0821 },
+    { champion: 'Viktor',     win_score: 0.0694 },
+    { champion: 'Syndra',     win_score: 0.0572 },
+    { champion: 'TwistedFate',win_score: 0.0431 },
+    { champion: 'Galio',      win_score: 0.0388 },
+  ];
+}
+
+function renderResults(recs, allies, enemies) {
+  const maxScore = recs[0]?.win_score || 1;
+
+  document.getElementById('contextLine').innerHTML =
+    `Position: <span class="context-champ">${selectedPos}</span> &nbsp;·&nbsp; ` +
+    `Allies: <span class="context-champ">${allies.join(', ')}</span> &nbsp;·&nbsp; ` +
+    `Enemies: <span class="context-champ">${enemies.join(', ')}</span>`;
+
+  const list = document.getElementById('recList');
+  list.innerHTML = recs.map((r, i) => `
+    <div class="rec-card" id="rec-${i}">
+      <div class="rec-rank">${i + 1}</div>
+      <div class="rec-info">
+        <div class="rec-name">${r.champion}</div>
+        <div class="rec-bar-wrap">
+          <div class="rec-bar" id="bar-${i}" style="width:0%"></div>
+        </div>
+      </div>
+      <div class="rec-score-wrap">
+        <div class="rec-score">${(r.win_score * 100).toFixed(2)}%</div>
+        <div class="rec-score-label">win score</div>
+      </div>
+    </div>
+  `).join('');
+
+  document.getElementById('results').classList.add('visible');
+
+  // Staggered entrance + bar animation
+  recs.forEach((r, i) => {
+    setTimeout(() => {
+      document.getElementById(`rec-${i}`).classList.add('shown');
+      setTimeout(() => {
+        const pct = ((r.win_score / maxScore) * 100).toFixed(1);
+        document.getElementById(`bar-${i}`).style.width = pct + '%';
+      }, 80);
+    }, i * 80);
+  });
+}
+</script>
+</body>
+</html>
